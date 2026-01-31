@@ -1,0 +1,175 @@
+# For controller DATAKOM
+info:
+  manufacturer: "Datakom_Corp"
+  model: "D500_Genset_Station"
+  #device_id: 20240501  # Впишите любое уникальное число здесь
+
+default:
+  update_interval: 60
+  digits: 2
+
+parameters:
+  - group: "Genset Monitoring"
+    items:
+      - name: "Gen L1 Voltage"
+        class: "voltage"
+        state_class: "measurement"
+        uom: "V"
+        scale: 0.1
+        rule: 2
+        registers: [10246] #[0x2806]
+
+      - name: "Gen L2 Voltage"
+        class: "voltage"
+        state_class: "measurement"
+        uom: "V"
+        scale: 0.1
+        rule: 2
+        registers: [10248] #[0x2808]
+
+      - name: "Gen L3 Voltage"
+        class: "voltage"
+        state_class: "measurement"
+        uom: "V"
+        scale: 0.1
+        rule: 2
+        registers: [10250] #[0x280A]
+
+      - name: "Gen L1 Current"
+        class: "current"
+        state_class: "measurement"
+        uom: "A"
+        scale: 0.1
+        rule: 2
+        registers: [10254] #[0x281E]
+
+      - name: "Gen L2 Current"
+        class: "current"
+        state_class: "measurement"
+        uom: "A"
+        scale: 0.1
+        rule: 2
+        registers: [10272] #[0x2820]
+
+      - name: "Gen L3 Current"
+        class: "current"
+        state_class: "measurement"
+        uom: "A"
+        scale: 0.1
+        rule: 2
+        registers: [10274] #[0x2822]
+
+      - name: "Gen Frequency"
+        class: "frequency"
+        state_class: "measurement"
+        uom: "Hz"
+        scale: 0.01
+        rule: 1
+        registers: [10339] #[0x2863]
+
+      - name: "Gen L1 active power"
+        class: "power"
+        state_class: "measurement"
+        uom: "kW"
+        scale: 0.1
+        rule: 2
+        registers: [10286]
+        
+
+      - name: "Gen L2 active power"
+        class: "power"
+        state_class: "measurement"
+        uom: "kW"
+        scale: 0.1
+        rule: 2
+        registers: [10288]
+        
+
+      - name: "Gen L3 active power"
+        class: "power"
+        state_class: "measurement"
+        uom: "kW"
+        scale: 0.1
+        rule: 2
+        registers: [10290]
+        
+        
+      - name: "Gen Active Power Total"
+        class: "power"
+        state_class: "measurement"
+        uom: "kW"
+        scale: 0.1
+        rule: 2
+        registers: [10294] #[0x2836]
+        
+        
+
+  - group: "Genset Engine"
+    items:
+      - name: "Gen Battery Voltage"
+        class: "voltage"
+        uom: "V"
+        scale: 0.01
+        rule: 1
+        registers: [10341] #[0x2865]
+
+      - name: "Gen Engine Speed"
+        icon: "mdi:engine"
+        uom: "RPM"
+        scale: 1
+        rule: 1
+        registers: [10376] #[0x2888]
+
+      - name: "Gen Coolant Temp"
+        class: "temperature"
+        uom: "°C"
+        scale: 0.1
+        rule: 1
+        registers: [10362] #[0x287A]
+
+      - name: "Gen Oil Pressure"
+        class: "pressure"
+        uom: "bar"
+        scale: 0.1
+        rule: 1
+        registers: [10361] #[0x2879]
+
+      - name: "Gen Fuel Level"
+        icon: "mdi:fuel"
+        uom: "%"
+        scale: 0.1
+        rule: 1
+        registers: [10363] #[0x287B]
+
+  - group: "Genset Stats"
+    items:
+      - name: "Gen Engine Run Time"
+        icon: "mdi:clock-outline"
+        uom: "h"
+        scale: 0.01
+        rule: 2
+        registers: [10366] #[0x297E]
+
+      - name: "Gen Total Energy"
+        class: "energy"
+        state_class: "total_increasing"
+        uom: "kWh"
+        scale: 0.1
+        rule: 2
+        registers: [10628] #[0x2984]
+
+  - group: "Genset Status"
+    items:
+      - name: "Gen Unit Mode"
+        class: "enum"
+        rule: 1
+        registers: [10605] #[0x296D]
+        lookup:
+          - key: 1
+            value: "Stop"
+          - key: 2
+            value: "Manual"
+          - key: 4
+            value: "Auto"
+          - key: 8
+            value: "Test"
