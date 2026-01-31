@@ -2,13 +2,44 @@
 info:
   manufacturer: "Datakom_Corp"
   model: "D500_Genset_Station"
-  #device_id: 20240501
+
 
 default:
   update_interval: 60
   digits: 2
 
 parameters:
+
+  - group: "Genset Monitoring Voltage"
+    items:
+      - name: "Main L1 Voltage"
+        class: "voltage"
+        state_class: "measurement"
+        uom: "V"
+        scale: 0.1
+        rule: 2
+        registers: [10240]
+        icon: "mdi:transmission-tower"
+ 
+      - name: "Main L2 Voltage"
+        class: "voltage"
+        state_class: "measurement"
+        uom: "V"
+        scale: 0.1
+        rule: 2
+        registers: [10242]
+        icon: "mdi:transmission-tower"
+
+      - name: "Main L3 Voltage"
+        class: "voltage"
+        state_class: "measurement"
+        uom: "V"
+        scale: 0.1
+        rule: 2
+        registers: [10244]
+        icon: "mdi:transmission-tower"
+
+
   - group: "Genset Monitoring"
     items:
       - name: "Gen L1 Voltage"
@@ -41,7 +72,7 @@ parameters:
         uom: "A"
         scale: 0.1
         rule: 2
-        registers: [10254] #[0x281E]
+        registers: [10270] #[0x281E]
 
       - name: "Gen L2 Current"
         class: "current"
@@ -148,7 +179,7 @@ parameters:
         uom: "h"
         scale: 0.01
         rule: 2
-        registers: [10366] #[0x297E]
+        registers: [10622, 10623] #[0x297E]
 
       - name: "Gen Total Energy"
         class: "energy"
