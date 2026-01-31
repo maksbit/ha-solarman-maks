@@ -2,7 +2,7 @@
 info:
   manufacturer: "Datakom_Corp"
   model: "D500_Genset_Station"
-  #device_id: 20240501  # Впишите любое уникальное число здесь
+  #device_id: 20240501
 
 default:
   update_interval: 60
