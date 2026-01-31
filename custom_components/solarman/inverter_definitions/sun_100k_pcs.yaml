@@ -36,7 +36,7 @@ parameters:
             value: "Off-Grid Inverter"
           - key: 0x0104
             value: "Energy Storage System"
-          - key: [0x0800, 0x0801, 0x0900, 0x0100, 0x0101] # Добавьте сюда то, что увидели в QModMaster
+          - key: [0x0800, 0x0801, 0x0900, 0x0100, 0x0101] 
             value: "HV 3-Phase SUN-100K PCS"
         attributes:
           [
