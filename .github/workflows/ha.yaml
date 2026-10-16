@@ -20,3 +20,6 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
+          # Fork-specific repository metadata checks. Runtime/manifest checks stay enabled.
+          # Re-enable these checks if publishing this fork to HACS defaults.
+          ignore: brands issues topics
