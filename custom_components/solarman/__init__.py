@@ -98,7 +98,10 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry[Coor
     #
     _LOGGER.debug(f"async_unload_entry: hass.config_entries.async_unload_platforms: {_PLATFORMS}")
 
-    return await hass.config_entries.async_unload_platforms(config_entry, _PLATFORMS)
+    unloaded = await hass.config_entries.async_unload_platforms(config_entry, _PLATFORMS)
+    if unloaded and config_entry.runtime_data is not None:
+        await config_entry.runtime_data.async_shutdown()
+    return unloaded
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry[Coordinator]):
     _LOGGER.debug(f"async_migrate_entry({config_entry.as_dict()})")

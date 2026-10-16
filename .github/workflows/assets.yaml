@@ -16,7 +16,7 @@ jobs:
     - name: Set
       run: |
           echo "workspace=${{ github.workspace }}" >> $GITHUB_ENV
-          echo "name=$(echo ${{ github.event.repository.name }} | sed 's/^[^-]*-//')" >> $GITHUB_ENV
+          echo "name=solarman" >> $GITHUB_ENV
           echo "version=$(echo '${{ github.event.release.name }}' | cut -c 2-)" >> $GITHUB_ENV
     - name: Prepare
       run: |

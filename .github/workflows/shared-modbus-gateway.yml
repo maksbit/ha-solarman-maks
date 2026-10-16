@@ -1,0 +1,44 @@
+name: Modbus TCP Gateway - Regression & Test Package
+on:
+  push:
+    branches: [main, feature/shared-modbus-gateway]
+  pull_request:
+  workflow_dispatch:
+jobs:
+  test-and-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Compile component
+        run: python -m compileall -q custom_components/solarman
+      - name: Run isolated TCP gateway tests
+        run: python -m unittest discover -s tests -v
+      - name: Validate included custom YAML profiles
+        run: |
+          python -m pip install PyYAML
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          for name in ("SUN_100K.yaml", "gen_datacom.yaml"):
+              file = Path("custom_components/solarman/inverter_definitions/custom") / name
+              with file.open(encoding="utf-8") as f:
+                  profile = yaml.safe_load(f)
+              assert isinstance(profile["info"], dict)
+              assert isinstance(profile["parameters"], list) and profile["parameters"]
+              print(name, "OK", len(profile["parameters"]), "groups")
+          PY
+      - name: Build installable custom component ZIP
+        shell: bash
+        run: |
+          cd custom_components/solarman
+          zip -qr "$RUNNER_TEMP/solarman.zip" .
+          unzip -l "$RUNNER_TEMP/solarman.zip" | grep -E '(SUN_100K|gen_datacom|shared_modbus_tcp)'
+      - name: Upload Home Assistant test package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ha-solarman-maks-test-package
+          path: ${{ runner.temp }}/solarman.zip
+          retention-days: 14
