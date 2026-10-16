@@ -48,6 +48,12 @@ class Device():
             self.modbus = Solarman(*self.endpoint.connection)
             self.profile = await ProfileProvider(self.config, self.endpoint).init(self.get)
         except Exception as e:
+            # Setup may fail after creating the session. Avoid leaked gateway refs.
+            if self.modbus is not None:
+                try:
+                    await self.modbus.release()
+                except Exception:
+                    _LOGGER.exception("Failed to release connection after setup error")
             raise type(e)(f"{"Timeout" if (x := isinstance(e, TimeoutError)) else "Error"} setuping {self.config.name}{"" if x else f": {strepr(e)}"}") from e
         else:
             self.state.update(True)
@@ -59,7 +65,7 @@ class Device():
     async def shutdown(self):
         self.state.value = -1
         if self.modbus:
-            await self.modbus.close()
+            await self.modbus.release()
 
     async def execute(self, code, address, **kwargs):
         _LOGGER.debug(f"[{self.endpoint.host}] Request {code:02} ❘ 0x{code:02X} ~ {address:04} ❘ 0x{address:04X}: {kwargs}")
@@ -93,7 +99,11 @@ class Device():
             pass
         except Exception as e:
             if self.state.update(exception = e) or runtime == 0:
-                await self.modbus.close()
+                # The shared Modbus TCP exchange has already discarded a bad
+                # connection. Do not close a healthy socket used by another
+                # config entry merely because this slave returned an error.
+                if self.modbus.transport != "modbus_tcp":
+                    await self.modbus.close()
                 if self.profile.parser:
                     self.profile.parser.reset()
                 raise

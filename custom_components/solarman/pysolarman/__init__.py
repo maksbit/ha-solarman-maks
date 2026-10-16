@@ -16,6 +16,7 @@ from .umodbus.client.serial import rtu
 from .umodbus.client import tcp
 
 from ..common import retry, throttle, create_task, format
+from .shared_modbus_tcp import acquire_gateway, release_gateway, _READ_CODES
 
 _LOGGER = getLogger(__name__)
 
@@ -76,6 +77,8 @@ class Solarman:
         self._data_queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize = 1)
         self._data_event = Event()
         self._last_frame: bytes | None = None
+        # Gateway pooling is intentionally enabled for plain Modbus TCP only.
+        self._gateway = acquire_gateway(host, port) if transport == "modbus_tcp" else None
 
     @staticmethod
     def _get_response_code(code: int):
@@ -118,7 +121,7 @@ class Solarman:
 
     @property
     def connected(self):
-        return self._keeper is not None and not self._keeper.done()
+        return self._gateway.connected if self._gateway is not None else self._keeper is not None and not self._keeper.done()
 
     @property
     def sequence_number(self):
@@ -316,12 +319,37 @@ class Solarman:
         if code not in FUNCTION_CODES:
             raise Exception(f"Invalid modbus function code {code:02}")
 
+        if self._gateway is not None:
+            request = tcp.function_code_to_function_map[code](self.slave, address, **kwargs)
+            # The stock driver waited timeout * 3 - 1 seconds for a reply.
+            # Preserve that bridge-friendly budget (14s with the 5s base setting).
+            response_timeout = max(self.timeout, self.timeout * 3 - 1)
+            async with asyncio.timeout(max(self.timeout * 6, response_timeout * 2 + 4)):
+                response = await self._gateway.exchange(request, response_timeout, retry_read=code in _READ_CODES)
+            return tcp.parse_response_adu(response, request)
+
         async with asyncio.timeout(self.timeout * 6):
             async with self._lock:
                 return await self.get_response(code, address, **kwargs)
 
+    def diagnostics(self) -> dict:
+        if self._gateway is not None:
+            return self._gateway.diagnostics()
+        return {"transport": self.transport, "connected": self.connected, "host": self.host, "port": self.port}
+
+    async def release(self):
+        """Release config-entry ownership, unlike close() which resets the connection."""
+        if self._gateway is not None:
+            gateway, self._gateway = self._gateway, None
+            await release_gateway(gateway)
+        else:
+            await self.close()
+
     @log_call("Closing connection")
     async def close(self):
+        if self._gateway is not None:
+            await self._gateway.reset()
+            return
         async with self._lock:
             if self.connected:
                 self._keeper.cancel()
