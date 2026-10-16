@@ -22,12 +22,23 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           import yaml
+          directory = Path("custom_components/solarman/inverter_definitions")
           for name in ("SUN_100K.yaml", "gen_datacom.yaml"):
-              file = Path("custom_components/solarman/inverter_definitions/custom") / name
+              file = directory / name
+              legacy = directory / "custom" / name
+              assert file.exists() and legacy.exists()
+              assert file.read_bytes() == legacy.read_bytes()
               with file.open(encoding="utf-8") as f:
                   profile = yaml.safe_load(f)
               assert isinstance(profile["info"], dict)
               assert isinstance(profile["parameters"], list) and profile["parameters"]
+              if name == "SUN_100K.yaml":
+                  controls = [
+                      i.get("name") for group in profile["parameters"]
+                      for i in group["items"] if i.get("platform") == "number"
+                  ]
+                  assert controls.count("Grid Peak shaving") == 1, "Duplicate entity ID"
+                  assert controls.count("PCS Grid Peak Shaving") == 1
               print(name, "OK", len(profile["parameters"]), "groups")
           PY
       - name: Build installable custom component ZIP

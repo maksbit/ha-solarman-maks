@@ -34,6 +34,9 @@ class GatewaySession:
         self.successes = 0
         self.failures = 0
         self.connections = 0
+        self.recovered_reads = 0
+        self.last_response_ms: int | None = None
+        self.last_failure: str | None = None
         self.last_error: str | None = None
         self.last_unit_id: int | None = None
 
@@ -50,6 +53,9 @@ class GatewaySession:
             "successful_requests": self.successes,
             "failed_attempts": self.failures,
             "tcp_connections": self.connections,
+            "recovered_reads": self.recovered_reads,
+            "last_response_ms": self.last_response_ms,
+            "last_failure": self.last_failure,
             "last_unit_id": self.last_unit_id,
             "last_error": self.last_error,
         }
@@ -82,29 +88,36 @@ class GatewaySession:
         expected_tid, expected_protocol, expected_length, expected_unit = struct.unpack(">HHHB", request[:7])
         if expected_protocol != 0 or expected_length != len(request) - 6:
             raise ValueError("Invalid Modbus TCP request MBAP header")
+        request_function = request[7]
 
         async with self._lock:
             attempts = 2 if retry_read else 1
             for attempt in range(attempts):
+                started = time.monotonic()
+                stage = "connect"
                 try:
                     async with asyncio.timeout(timeout):
                         if not self.connected:
                             self._reader, self._writer = await asyncio.open_connection(self.host, self.port)
                             self.connections += 1
                             _LOGGER.debug("[%s:%s] Connected; shared clients=%d", self.host, self.port, self.references)
+                        stage = "turnaround"
                         # Conservative RTU inter-request turnaround for TCP/serial bridges.
                         delay = 0.05 - (time.monotonic() - self._last_sent)
                         if delay > 0:
                             await asyncio.sleep(delay)
+                        stage = "send"
                         self._writer.write(request)
                         self._last_sent = time.monotonic()
                         await self._writer.drain()
 
                         # TCP is a byte stream; short reads are normal.
+                        stage = "mbap_header"
                         header = await self._reader.readexactly(7)
                         transaction, protocol, length, unit = struct.unpack(">HHHB", header)
                         if protocol != 0 or not 2 <= length <= 254:
                             raise ModbusFrameError("Invalid Modbus TCP MBAP length/protocol")
+                        stage = "mbap_body"
                         body = await self._reader.readexactly(length - 1)
                         if transaction != expected_tid or unit != expected_unit:
                             raise ModbusFrameError(
@@ -114,6 +127,15 @@ class GatewaySession:
                         self.last_unit_id = unit
                         self.last_error = None
                         self.successes += 1
+                        self.last_response_ms = round((time.monotonic() - started) * 1000)
+                        if attempt:
+                            self.recovered_reads += 1
+                            _LOGGER.debug(
+                                "[%s:%s] Modbus TCP slave=%d fc=%d tid=%d recovered on read retry; "
+                                "last_failure=%s",
+                                self.host, self.port, expected_unit, request_function,
+                                expected_tid, self.last_failure,
+                            )
                         return header + body
                 except asyncio.CancelledError:
                     # Cancellation may occur in the middle of an ADU; do not reuse it.
@@ -123,10 +145,16 @@ class GatewaySession:
                     raise
                 except (OSError, TimeoutError, asyncio.IncompleteReadError, ModbusFrameError) as exc:
                     self.failures += 1
-                    self.last_error = f"{type(exc).__name__}: {exc}"
-                    _LOGGER.warning(
-                        "[%s:%s] Modbus TCP slave=%d attempt=%d/%d failed: %s",
-                        self.host, self.port, expected_unit, attempt + 1, attempts, self.last_error
+                    elapsed = round((time.monotonic() - started) * 1000)
+                    detail = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+                    self.last_error = (
+                        f"{detail}, stage={stage}, elapsed_ms={elapsed}, "
+                        f"slave={expected_unit}, fc={request_function}, tid={expected_tid}"
+                    )
+                    self.last_failure = self.last_error
+                    (_LOGGER.warning if attempt + 1 == attempts else _LOGGER.debug)(
+                        "[%s:%s] Modbus TCP request attempt=%d/%d failed: %s",
+                        self.host, self.port, attempt + 1, attempts, self.last_error,
                     )
                     await self._close_locked()
                     if attempt + 1 == attempts:

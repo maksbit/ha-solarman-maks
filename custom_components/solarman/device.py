@@ -99,7 +99,11 @@ class Device():
             pass
         except Exception as e:
             if self.state.update(exception = e) or runtime == 0:
-                await self.modbus.close()
+                # The shared Modbus TCP exchange has already discarded a bad
+                # connection. Do not close a healthy socket used by another
+                # config entry merely because this slave returned an error.
+                if self.modbus.transport != "modbus_tcp":
+                    await self.modbus.close()
                 if self.profile.parser:
                     self.profile.parser.reset()
                 raise

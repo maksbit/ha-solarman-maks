@@ -1417,8 +1417,8 @@ parameters:
     #     value:
     #       bit: 2
 
-      - name: Grid Peak shaving
-        unique_id: grid_peak_shaving
+      - name: "PCS Grid Peak Shaving"
+        unique_id: pcs_grid_peak_shaving
         platform: number
         uom: "kW"
         rule: 4

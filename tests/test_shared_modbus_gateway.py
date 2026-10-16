@@ -95,11 +95,45 @@ class TestSharedGateway(unittest.TestCase):
                 self.assertEqual(value[6], 2)
                 self.assertEqual(connections, 2)
                 self.assertEqual(session.diagnostics()["failed_attempts"], 1)
+                self.assertEqual(session.diagnostics()["recovered_reads"], 1)
+                self.assertIn("mbap_header", session.diagnostics()["last_failure"])
             finally:
                 await gateway.release_gateway(session)
                 server.close()
                 await server.wait_closed()
 
+        asyncio.run(main())
+
+
+    def test_delayed_reply_under_budget_keeps_same_connection(self):
+        async def main():
+            connections = 0
+            async def handle(reader, writer):
+                nonlocal connections
+                connections += 1
+                try:
+                    header = await reader.readexactly(7)
+                    length = struct.unpack(">H", header[4:6])[0]
+                    req = header + await reader.readexactly(length - 1)
+                    await asyncio.sleep(0.12)
+                    writer.write(response(req))
+                    await writer.drain()
+                finally:
+                    writer.close()
+                    await writer.wait_closed()
+            server = await asyncio.start_server(handle, "127.0.0.1", 0)
+            port = server.sockets[0].getsockname()[1]
+            session = gateway.acquire_gateway("127.0.0.1", port)
+            try:
+                result = await session.exchange(request(1, 12), 0.5, retry_read=True)
+                self.assertEqual(result[6], 1)
+                self.assertEqual(connections, 1)
+                self.assertEqual(session.diagnostics()["failed_attempts"], 0)
+                self.assertGreaterEqual(session.diagnostics()["last_response_ms"], 100)
+            finally:
+                await gateway.release_gateway(session)
+                server.close()
+                await server.wait_closed()
         asyncio.run(main())
 
     def test_write_not_replayed_on_uncertain_failure(self):

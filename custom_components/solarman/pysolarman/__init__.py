@@ -321,8 +321,11 @@ class Solarman:
 
         if self._gateway is not None:
             request = tcp.function_code_to_function_map[code](self.slave, address, **kwargs)
-            async with asyncio.timeout(self.timeout * 6):
-                response = await self._gateway.exchange(request, self.timeout, retry_read=code in _READ_CODES)
+            # The stock driver waited timeout * 3 - 1 seconds for a reply.
+            # Preserve that bridge-friendly budget (14s with the 5s base setting).
+            response_timeout = max(self.timeout, self.timeout * 3 - 1)
+            async with asyncio.timeout(max(self.timeout * 6, response_timeout * 2 + 4)):
+                response = await self._gateway.exchange(request, response_timeout, retry_read=code in _READ_CODES)
             return tcp.parse_response_adu(response, request)
 
         async with asyncio.timeout(self.timeout * 6):

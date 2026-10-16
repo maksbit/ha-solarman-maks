@@ -13,26 +13,42 @@ The experiment in this branch changes **only plain Modbus TCP**:
 - Exact Modbus TCP MBAP-framed reads, including fragmented TCP packets.
 - Transaction ID, Unit ID and protocol/length validation.
 - Automatic reconnect with one bounded retry of **read-only** FC01–FC04.
+- Preserves the original Solarman 14-second Modbus response budget (5s base ×3 −1),
+  rather than the incorrect 5-second timeout of the first experimental build.
+- Warns only for an unrecovered request, with function code, Modbus ID, stage,
+  elapsed time; retry recoveries are counted in diagnostics.
 - **No automatic retransmission of writes** on uncertain TCP errors.
 - Shared connection reference counting and reset on repeated device errors.
 - Per-gateway counters shown in Home Assistant's integration diagnostics:
   `connected`, `clients`, `successful_requests`, `failed_attempts`,
-  `tcp_connections`, `last_unit_id`, `last_error`.
+  `tcp_connections`, `recovered_reads`, `last_response_ms`,
+  `last_failure`, `last_unit_id`, `last_error`.
 
 Solarman V5 (`tcp`) and serial RTU (`modbus_rtu`) use their existing
 code paths. This is a testing branch, not yet field-verified on the inverter bus.
 
 ## User-supplied device profiles
 
-Exact user-supplied sources, without editing their register maps:
-- `custom_components/solarman/inverter_definitions/custom/SUN_100K.yaml` —
+Profiles are now installed in the **root** of inverter_definitions, as
+requested, so the normal profile selector can list them directly:
+- `custom_components/solarman/inverter_definitions/SUN_100K.yaml` —
   SUN-100K PCS / Deye profile (40 groups).
-- `custom_components/solarman/inverter_definitions/custom/gen_datacom.yaml` —
+- `custom_components/solarman/inverter_definitions/gen_datacom.yaml` —
   DATAKOM D500 generator controller (6 groups).
 
-Select these profiles explicitly when configuring their devices. The source
-filename `SUN_100K (1).yaml` was normalized to `SUN_100K.yaml`; its bytes
-were otherwise preserved. Default bundled profiles remain unchanged.
+Identical copies also remain in `inverter_definitions/custom/` so Home Assistant
+config entries already set to `custom/SUN_100K.yaml` or
+`custom/gen_datacom.yaml` continue working. Both locations have the same
+contents in the release ZIP.
+
+The source filename `SUN_100K (1).yaml` was normalized to `SUN_100K.yaml`.
+To resolve a **real Home Assistant unique-ID collision** in the original SUN
+profile, only the control label at register 2104 and its declared unique_id
+were changed from `Grid Peak shaving` / `grid_peak_shaving` to
+`PCS Grid Peak Shaving` / `pcs_grid_peak_shaving`. The second, distinct
+`Grid Peak shaving` control at register 0x00BF was not changed. All register
+maps, multipliers and units are unchanged. The Datakom profile is byte-identical
+to the user upload.
 
 ## Obtain the test package
 
@@ -43,13 +59,16 @@ successful latest run of this branch, download artifact
 The ZIP contains the *contents* of `custom_components/solarman` (not its
 parent directory). To test before merging, use manual installation:
 
-1. Back up `/config/custom_components/solarman` and the Home Assistant
+1. On HAOS, use Samba to back up `/config/custom_components/solarman` and the Home Assistant
    configuration. Do not delete Solarman config entries or entities.
-2. Stop Home Assistant Core (or at minimum do not use controls during update).
-3. Unzip `solarman.zip` **into**
-   `/config/custom_components/solarman/`, overwriting package files.
-   Confirm `pysolarman/shared_modbus_tcp.py` and both custom YAML files exist.
-4. Start Home Assistant Core again. Set both inverter config entries to
+2. Unpack `solarman.zip` on your PC or Mac. It contains the contents of the integration folder; create a folder named `solarman` around these files.
+3. Using your HAOS Samba `config` share, replace the old
+   `custom_components/solarman/` directory with that extracted `solarman`
+   folder. Keep the old copy as a backup. Confirm
+   `pysolarman/shared_modbus_tcp.py` and root-level
+   `inverter_definitions/SUN_100K.yaml`,
+   `inverter_definitions/gen_datacom.yaml` exist.
+4. Restart Home Assistant Core from Settings → System. Set both inverter config entries to
    the same ETH-485 gateway IP/port with `Modbus TCP` transport and
    **distinct** `Modbus Slave ID` values.
 5. Observe stable updates for both inverters for a period longer than the
@@ -57,8 +76,9 @@ parent directory). To test before merging, use manual installation:
 6. Disable automatic HACS updates for Solarman while using this manually
    installed experiment; an upstream HACS update can overwrite the files.
 
-Home Assistant OS commonly uses `/config` inside the terminal/SSH add-on;
-some installations display the same directory as `/homeassistant`.
+No command-line access is needed. Home Assistant OS commonly exposes `config`
+as a Samba share. If existing config entries reference the former root profile
+file `SUN_100K (1).yaml`, select `SUN_100K.yaml` in their options.
 
 ## Diagnostics and fault isolation
 
